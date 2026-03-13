@@ -1,5 +1,5 @@
 # Makefile for building Cell2Fire on macOS using Homebrew-installed GCC
-CXX := g++
+CXX ?= g++
 
 # get include and library paths
 BOOST_PREFIX := $(shell brew --prefix boost)
@@ -10,9 +10,10 @@ CATCH2_PREFIX := $(shell brew --prefix catch2)
 # Compiler flags
 CXXFLAGS = -m64 -fPIC -fno-strict-aliasing -fexceptions -DNDEBUG -DIL_STD -std=c++14 -O3 \
 	   -I$(BOOST_PREFIX)/include \
-	   -Xclang -fopenmp -I$(OMP_PREFIX)/include \
+	   -fopenmp -I$(OMP_PREFIX)/include \
 	   -I$(TIFF_PREFIX)/include \
 	   -I$(CATCH2_PREFIX)/include
+
 # Linker flags
 LDFLAGS = -m64 -fPIC -fno-strict-aliasing -fexceptions -DNDEBUG -DIL_STD -lm -lpthread \
 	  -L$(BOOST_PREFIX)/lib \
@@ -27,7 +28,7 @@ CATCH2_V3_LIBS := $(shell [ $(CATCH2_VERSION) -gt 2 ] && echo "-L$(CATCH2_PREFIX
 TEST_LDFLAGS = $(LDFLAGS) $(CATCH2_V3_LIBS)
 
 # Source files
-SRCS = Cell2Fire.cpp Cells.cpp FuelModelUtils.cpp FuelModelSpain.cpp FuelModelPortugal.cpp FuelModelKitral.cpp FuelModelFBP.cpp Spotting.cpp ReadCSV.cpp ReadArgs.cpp Lightning.cpp WriteCSV.cpp DataGenerator.cpp
+SRCS = Cell2Fire.cpp Cells.cpp FuelModelUtils.cpp FuelModelSpain.cpp FuelModelPortugal.cpp FuelModelKitral.cpp FuelModelFBP.cpp Spotting.cpp ReadCSV.cpp ReadArgs.cpp Lightning.cpp WriteCSV.cpp DataGenerator.cpp FuelModelRegistry.cpp
 
 # Object files
 OBJS = $(SRCS:.cpp=.o)

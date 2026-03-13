@@ -3,6 +3,7 @@
 
 // include stuff
 #include "ReadArgs.h"
+#include <array>
 #include <math.h>
 #include <stdio.h>
 #include <string>
@@ -100,6 +101,8 @@ class Cells
                                                    // maybe int : double
     std::unordered_map<int, double> distToCenter;  // CP: dictionary {int: double}
     std::unordered_map<int, int> angleToNb;        // CP: dictionary {double: int}
+    std::unordered_map<int, std::array<int, 2>> neighborDelta;  // direction vector toward each neighbor
+    std::array<double, 2> ignitionFocusOffset;                  // offset from cell center to current focus
 
     // TODO: reference to shared object
 
@@ -142,7 +145,8 @@ class Cells
                                 std::vector<float>& SurfaceFlameLengths,
                                 std::vector<float>& CrownFlameLengths,
                                 std::vector<float>& CrownIntensities,
-                                std::vector<float>& MaxFlameLengths);
+                                std::vector<float>& MaxFlameLengths,
+                                std::unordered_map<int, std::array<double, 2>>& ignitionContacts);
 
     std::vector<int> manageFireBBO(int period,
                                    std::unordered_set<int>& AvailSet,
@@ -163,7 +167,8 @@ class Cells
                                    std::vector<float>& surfFraction,
                                    std::vector<float>& Intensities,
                                    std::vector<float>& RateOfSpreads,
-                                   std::vector<float>& FlameLengths);
+                                   std::vector<float>& FlameLengths,
+                                   std::unordered_map<int, std::array<double, 2>>& ignitionContacts);
 
     bool get_burned(int period,
                     int season,
@@ -180,6 +185,12 @@ class Cells
     void setStatus(int status_int);
 
     std::string getStatus();
+
+    void setIgnitionFocusToCenter();
+    void setIgnitionFocusFromNeighbor(int neighborId);
+    double distanceToNeighborBoundary(int neighborId) const;
+    void setIgnitionFocusAtPoint(const std::array<double, 2>& offset);
+    std::array<double, 2> contactPointForNeighbor(int neighborId, double ignitionDistance) const;
 
     bool ignition(int period,
                   int year,

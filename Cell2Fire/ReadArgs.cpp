@@ -1,5 +1,6 @@
 // Inclusions
 #include "ReadArgs.h"
+#include "FuelModelRegistry.h"
 #include <algorithm>
 #include <dirent.h>
 #include <fstream>
@@ -106,6 +107,7 @@ parseArgs(int argc, char* argv[], arguments* args_ptr)
     bool out_stats = false;
     bool bbo_tuning = false;
     bool allow_cros = false;
+    bool center_ignition = false;
 
     //--out-messages
     if (cmdOptionExists(argv, argv + argc, "--output-messages"))
@@ -199,6 +201,12 @@ parseArgs(int argc, char* argv[], arguments* args_ptr)
         printf("FinalGrid: %s \n", btoa(out_finalgrid));
     }
 
+    if (cmdOptionExists(argv, argv + argc, "--center-ignition"))
+    {
+        center_ignition = true;
+        printf("CenterIgnition: %s \n", btoa(center_ignition));
+    }
+
     //--Prom_tuned
     // if (cmdOptionExists(argv, argv + argc, "--PromTuned")) {
     //	prom_tuned = true;
@@ -229,14 +237,15 @@ parseArgs(int argc, char* argv[], arguments* args_ptr)
     // defaults
     int dsim_years = 1;
     int dnsims = 1;
-    int dweather_period_len = 60;
+    int dweather_period_len = 30;
     int dmax_fire_periods = -1;
     int dseed = 123;
     int diradius = 0;
     int dnthreads = 1;
     int dfmc = 100;
     int dscen = 3;
-    float dROS_Threshold = 0.1;
+    float dROS_Threshold = 0.25;
+    float dContactROSThreshold = 0.0;
     float dHFI_Threshold = 0.1;
     float dCROS_Threshold = 0.5;
     // float dCROSAct_Threshold= 1.0;
@@ -253,6 +262,7 @@ parseArgs(int argc, char* argv[], arguments* args_ptr)
 
     // aux
     std::string::size_type sz;
+    std::string fuel_table_path = "tools/fuel_models/scott_burgan_table7.csv";
 
     //--sim-years  (float)
     char* sim_years = getCmdOption(argv, argv + argc, "--sim-years");
@@ -296,6 +306,13 @@ parseArgs(int argc, char* argv[], arguments* args_ptr)
     {
         printf("No Simulator Option Selected, using S&B as default!!! \n");
         args_ptr->Simulator = "S";
+    }
+
+    //--fuel-table
+    char* fuel_table_option = getCmdOption(argv, argv + argc, "--fuel-table");
+    if (fuel_table_option)
+    {
+        fuel_table_path = fuel_table_option;
     }
 
     //--Weather-Period-Length
@@ -385,6 +402,16 @@ parseArgs(int argc, char* argv[], arguments* args_ptr)
     }
     else
         args_ptr->ROSThreshold = dROS_Threshold;
+
+    //--Contact-ROS-Threshold
+    char* contact_ros_threshold = getCmdOption(argv, argv + argc, "--Contact-ROS-Threshold");
+    if (contact_ros_threshold)
+    {
+        printf("ContactROSThreshold: %s \n", contact_ros_threshold);
+        args_ptr->ContactROSThreshold = std::stof(contact_ros_threshold, &sz);
+    }
+    else
+        args_ptr->ContactROSThreshold = dContactROSThreshold;
 
     //--CROS-Threshold
     char* CROS_Threshold = getCmdOption(argv, argv + argc, "--CROS-Threshold");
@@ -597,6 +624,14 @@ parseArgs(int argc, char* argv[], arguments* args_ptr)
     args_ptr->Stats = out_stats;
     args_ptr->BBOTuning = bbo_tuning;
     args_ptr->AllowCROS = allow_cros;
+    args_ptr->ForceCenterIgnition = center_ignition;
+    args_ptr->FuelTablePath = fuel_table_path;
+
+    if (!FuelModelRegistry::instance().ensureLoaded(args_ptr->FuelTablePath))
+    {
+        std::cerr << "Warning: Scott & Burgan fuel table not loaded from '" << args_ptr->FuelTablePath << "'"
+                  << std::endl;
+    }
 }
 
 void

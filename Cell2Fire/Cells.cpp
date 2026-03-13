@@ -101,6 +101,8 @@ Cells::Cells(int _id,
     this->ROSAngleDir = std::unordered_map<int, double>();
     this->distToCenter = std::unordered_map<int, double>();
     this->angleToNb = std::unordered_map<int, int>();
+    this->neighborDelta = std::unordered_map<int, std::array<int, 2>>();
+    this->ignitionFocusOffset = { 0.0, 0.0 };
 }
 
 /**
@@ -128,6 +130,7 @@ Cells::initializeFireFields(std::vector<std::vector<int>>& coordCells,
                             int rows)  // WORKING CHECK OK
 {
     std::vector<int> adj = adjacentCells(this->realId, rows, cols);
+    this->neighborDelta.clear();
 
     for (auto& nb : adj)
     {
@@ -135,8 +138,10 @@ Cells::initializeFireFields(std::vector<std::vector<int>>& coordCells,
         // std::cout << "DEBUG1: adjacent: " << nb.second << std::endl;
         if (nb != -1)
         {
-            int a = -1 * coordCells[nb - 1][0] + coordCells[this->id][0];
-            int b = -1 * coordCells[nb - 1][1] + coordCells[this->id][1];
+            int deltaX = coordCells[nb - 1][0] - coordCells[this->id][0];
+            int deltaY = coordCells[nb - 1][1] - coordCells[this->id][1];
+            int a = -deltaX;
+            int b = -deltaY;
 
             int angle = -1;
             if (a == 0)
@@ -175,6 +180,7 @@ Cells::initializeFireFields(std::vector<std::vector<int>>& coordCells,
             this->angleToNb[angle] = nb;
             this->fireProgress[nb] = 0.0;
             this->distToCenter[nb] = std::sqrt(a * a + b * b) * this->_ctr2ctrdist;
+            this->neighborDelta[nb] = { deltaX, deltaY };
         }
     }
 }
@@ -432,7 +438,8 @@ Cells::manageFire(int period,
                   std::vector<float>& SurfaceFlameLengths,
                   std::vector<float>& CrownFlameLengths,
                   std::vector<float>& CrownIntensities,
-                  std::vector<float>& MaxFlameLengths)
+                  std::vector<float>& MaxFlameLengths,
+                  std::unordered_map<int, std::array<double, 2>>& ignitionContacts)
 {
     // Special flag for repetition (False = -99 for the record)
     int repeat = -99;
@@ -626,7 +633,12 @@ Cells::manageFire(int period,
             double angle = _angle.first;
             int nb = angleToNb[angle];
             float ros = (1 + args->ROSCV * ROSRV) * _angle.second;
+            if (ros < args->ContactROSThreshold)
+            {
+                continue;
+            }
             float roundedRos = static_cast<float>(std::ceil(ros * 100.0) / 100.0);
+            double ignitionDistance = this->distanceToNeighborBoundary(nb);
 
             if (std::isnan(ros))
             {
@@ -654,9 +666,13 @@ Cells::manageFire(int period,
 
             // If the message arrives to the adjacent cell's center, send a
             // message
-            if (this->fireProgress[nb] >= this->distToCenter[nb])
+            if (this->fireProgress[nb] >= ignitionDistance)
             {
                 msg_list.push_back(nb);
+                if (ignitionContacts.find(nb) == ignitionContacts.end())
+                {
+                    ignitionContacts[nb] = this->contactPointForNeighbor(nb, ignitionDistance);
+                }
                 FSCell->push_back(double(this->realId));
                 FSCell->push_back(double(nb));
                 FSCell->push_back(double(period));
@@ -715,7 +731,7 @@ Cells::manageFire(int period,
             }
 
             // Info for debugging status of the cell and fire evolution
-            if (this->fireProgress[nb] < this->distToCenter[nb] && repeat == -100 && -100 != msg_list_aux[0])
+            if (this->fireProgress[nb] < ignitionDistance && repeat == -100 && -100 != msg_list_aux[0])
             {
                 if (args->verbose)
                 {
@@ -789,7 +805,8 @@ Cells::manageFireBBO(int period,
                      std::vector<float>& surfFraction,
                      std::vector<float>& Intensities,
                      std::vector<float>& RateOfSpreads,
-                     std::vector<float>& FlameLengths)
+                     std::vector<float>& FlameLengths,
+                     std::unordered_map<int, std::array<double, 2>>& ignitionContacts)
 {
     // Special flag for repetition (False = -99 for the record)
     int repeat = -99;
@@ -979,6 +996,11 @@ Cells::manageFireBBO(int period,
             double angle = _angle.first;
             int nb = angleToNb[angle];
             double ros = (1 + args->ROSCV * ROSRV) * _angle.second;
+            if (ros < args->ContactROSThreshold)
+            {
+                continue;
+            }
+            double ignitionDistance = this->distanceToNeighborBoundary(nb);
 
             if (args->verbose)
             {
@@ -990,9 +1012,13 @@ Cells::manageFireBBO(int period,
 
             // If the message arrives to the adjacent cell's center, send a
             // message
-            if (this->fireProgress[nb] >= this->distToCenter[nb])
+            if (this->fireProgress[nb] >= ignitionDistance)
             {
                 msg_list.push_back(nb);
+                if (ignitionContacts.find(nb) == ignitionContacts.end())
+                {
+                    ignitionContacts[nb] = this->contactPointForNeighbor(nb, ignitionDistance);
+                }
                 FSCell->push_back(double(this->realId));
                 FSCell->push_back(double(nb));
                 FSCell->push_back(double(period));
@@ -1034,7 +1060,7 @@ Cells::manageFireBBO(int period,
             }
 
             // Info for debugging status of the cell and fire evolution
-            if (this->fireProgress[nb] < this->distToCenter[nb] && repeat == -100 && -100 != msg_list_aux[0])
+            if (this->fireProgress[nb] < ignitionDistance && repeat == -100 && -100 != msg_list_aux[0])
             {
                 if (args->verbose)
                 {
@@ -1239,6 +1265,83 @@ Cells::getStatus()
     return this->StatusD[this->status];
 }
 
+void
+Cells::setIgnitionFocusToCenter()
+{
+    this->ignitionFocusOffset = { 0.0, 0.0 };
+}
+
+void
+Cells::setIgnitionFocusFromNeighbor(int neighborId)
+{
+    auto dirIt = this->neighborDelta.find(neighborId);
+    if (dirIt == this->neighborDelta.end())
+    {
+        setIgnitionFocusToCenter();
+        return;
+    }
+    double halfSide = this->_ctr2ctrdist / 2.0;
+    this->ignitionFocusOffset = { dirIt->second[0] * halfSide, dirIt->second[1] * halfSide };
+}
+
+void
+Cells::setIgnitionFocusAtPoint(const std::array<double, 2>& offset)
+{
+    this->ignitionFocusOffset = offset;
+}
+
+std::array<double, 2>
+Cells::contactPointForNeighbor(int neighborId, double ignitionDistance) const
+{
+    auto dirIt = this->neighborDelta.find(neighborId);
+    if (dirIt == this->neighborDelta.end())
+    {
+        return { 0.0, 0.0 };
+    }
+    double dx = static_cast<double>(dirIt->second[0]);
+    double dy = static_cast<double>(dirIt->second[1]);
+    double norm = std::sqrt(dx * dx + dy * dy);
+    if (norm == 0)
+    {
+        return { 0.0, 0.0 };
+    }
+    double unitX = dx / norm;
+    double unitY = dy / norm;
+    double contactParentX = this->ignitionFocusOffset[0] + unitX * ignitionDistance;
+    double contactParentY = this->ignitionFocusOffset[1] + unitY * ignitionDistance;
+    double centerDistance = this->_ctr2ctrdist;
+    auto distIt = this->distToCenter.find(neighborId);
+    if (distIt != this->distToCenter.end())
+    {
+        centerDistance = distIt->second;
+    }
+    double neighborCenterX = unitX * centerDistance;
+    double neighborCenterY = unitY * centerDistance;
+    return { contactParentX - neighborCenterX, contactParentY - neighborCenterY };
+}
+
+double
+Cells::distanceToNeighborBoundary(int neighborId) const
+{
+    auto dirIt = this->neighborDelta.find(neighborId);
+    if (dirIt == this->neighborDelta.end())
+    {
+        auto fallback = this->distToCenter.find(neighborId);
+        if (fallback == this->distToCenter.end())
+        {
+            return this->_ctr2ctrdist;
+        }
+        return fallback->second;
+    }
+    double halfSide = this->_ctr2ctrdist / 2.0;
+    double boundaryX = dirIt->second[0] * halfSide;
+    double boundaryY = dirIt->second[1] * halfSide;
+    double dx = boundaryX - this->ignitionFocusOffset[0];
+    double dy = boundaryY - this->ignitionFocusOffset[1];
+    return std::sqrt(dx * dx + dy * dy);
+}
+
+
 /**
  * @brief Ignites a cell.
  *
@@ -1282,6 +1385,7 @@ Cells::ignition(int period,
         this->fireStarts = period;
         this->fireStartsSeason = year;
         this->burntP = period;
+        this->setIgnitionFocusToCenter();
 
         // An ignition has happened
         return true;
@@ -1380,6 +1484,7 @@ Cells::ignition(int period,
             this->fireStarts = period;
             this->fireStartsSeason = year;
             this->burntP = period;
+            this->setIgnitionFocusToCenter();
 
             return true;
         }

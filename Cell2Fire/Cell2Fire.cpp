@@ -1137,6 +1137,8 @@ Cell2Fire::SendMessages()
 
     // Clean list
     this->burnedOutList.clear();
+    this->nextIgnitionFocus.clear();
+    const bool useTangencyFocus = !this->args.ForceCenterIgnition;
 
     // Check ending
     if (fire_period[year - 1] == this->totalFirePeriods - 1 && this->args.verbose)
@@ -1170,6 +1172,7 @@ Cell2Fire::SendMessages()
     for (int cell : this->burningCells)
     {
         std::vector<int> aux_list;
+        std::unordered_map<int, std::array<double, 2>> cellContacts;
         // Get object from unordered map
         it = this->Cells_Obj.find(cell);
 
@@ -1209,7 +1212,8 @@ Cell2Fire::SendMessages()
                                                  this->surfaceFlameLengths,
                                                  this->crownFlameLengths,
                                                  this->crownIntensities,
-                                                 this->maxFlameLengths);
+                                                 this->maxFlameLengths,
+                                                 cellContacts);
             }
 
             else
@@ -1236,7 +1240,8 @@ Cell2Fire::SendMessages()
                                                     this->surfFraction,
                                                     this->surfaceIntensities,
                                                     this->RateOfSpreads,
-                                                    this->surfaceFlameLengths);
+                                                    this->surfaceFlameLengths,
+                                                    cellContacts);
             }
             // std::cout << "Sale de Manage Fire" << std::endl;
         }
@@ -1248,6 +1253,17 @@ Cell2Fire::SendMessages()
                           << " does not have any neighbor available for receiving "
                              "messages"
                           << std::endl;
+        }
+
+        if (useTangencyFocus)
+        {
+            for (const auto& contact : cellContacts)
+            {
+                if (this->nextIgnitionFocus.find(contact.first) == this->nextIgnitionFocus.end())
+                {
+                    this->nextIgnitionFocus[contact.first] = contact.second;
+                }
+            }
         }
 
         // If message and not a true flag
@@ -1361,6 +1377,18 @@ Cell2Fire::GetMessages(const std::unordered_map<int, std::vector<int>>& sendMess
                   << std::endl;
         std::cout << "Current Fire Period: " << this->fire_period[this->year - 1] << std::endl;
         printSets(this->availCells, this->nonBurnableCells, this->burningCells, this->burntCells, this->harvestCells);
+    }
+
+    std::unordered_map<int, int> ignitionParents;
+    for (const auto& sender : sendMessageList)
+    {
+        for (int recipient : sender.second)
+        {
+            if (ignitionParents.find(recipient) == ignitionParents.end())
+            {
+                ignitionParents[recipient] = sender.first;
+            }
+        }
     }
 
     // Conditions depending on number of messages and repeatFire flag
@@ -1500,6 +1528,31 @@ Cell2Fire::GetMessages(const std::unordered_map<int, std::vector<int>>& sendMess
                 // Update the burntlist
                 if (checkBurnt)
                 {
+                    if (this->args.ForceCenterIgnition)
+                    {
+                        it->second.setIgnitionFocusToCenter();
+                    }
+                    else
+                    {
+                        auto storedFocus = this->nextIgnitionFocus.find(bc);
+                        if (storedFocus != this->nextIgnitionFocus.end())
+                        {
+                            it->second.setIgnitionFocusAtPoint(storedFocus->second);
+                        }
+                        else
+                        {
+                            auto focusIt = ignitionParents.find(bc);
+                            if (focusIt != ignitionParents.end())
+                            {
+                                it->second.setIgnitionFocusFromNeighbor(focusIt->second);
+                            }
+                            else
+                            {
+                                it->second.setIgnitionFocusToCenter();
+                            }
+                        }
+                    }
+
                     burntList.insert(it->second.realId);
 
                     // Cleaning step
@@ -2384,6 +2437,13 @@ main(int argc, char* argv[])
                 {
                     break;
                 }
+            }
+
+            if (!Forest.done)
+            {
+                Forest.Results();
+                Forest.sim += 1;
+                Forest.done = true;
             }
         }
     }

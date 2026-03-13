@@ -1,10 +1,13 @@
 # Compiler
-CXX = g++
+CXX ?= g++
 # bookworm:12, trixie:14, ubuntu24.04:13
 
 # Compiler and linker flags
 CXXFLAGS = -m64 -fPIC -fno-strict-aliasing -fexceptions -fopenmp -DNDEBUG -DIL_STD -std=c++14 -O3
 LDFLAGS = -m64 -fPIC -fno-strict-aliasing -fexceptions -fopenmp -DNDEBUG -DIL_STD -lm -lpthread -ltiff
+BREW_PREFIX ?= /opt/homebrew
+CXXFLAGS += -I$(BREW_PREFIX)/include
+LDFLAGS += -L$(BREW_PREFIX)/lib
 
 # Test-specific linker flags (for Catch2 v3 - optional, will be ignored if not available)
 # Detect Catch2 version from package (for info only)
@@ -14,7 +17,7 @@ CATCH2_V3_LIBS := $(shell echo "int main(){}" | $(CXX) -x c++ - -lCatch2Main -lC
 TEST_LDFLAGS = $(LDFLAGS) $(CATCH2_V3_LIBS)
 
 # Source files
-SRCS = Cell2Fire.cpp Cells.cpp FuelModelUtils.cpp FuelModelSpain.cpp FuelModelPortugal.cpp FuelModelKitral.cpp FuelModelFBP.cpp Spotting.cpp ReadCSV.cpp ReadArgs.cpp Lightning.cpp WriteCSV.cpp DataGenerator.cpp
+SRCS = Cell2Fire.cpp Cells.cpp FuelModelUtils.cpp FuelModelSpain.cpp FuelModelPortugal.cpp FuelModelKitral.cpp FuelModelFBP.cpp Spotting.cpp ReadCSV.cpp ReadArgs.cpp Lightning.cpp WriteCSV.cpp DataGenerator.cpp FuelModelRegistry.cpp
 
 # Object files
 OBJS = $(SRCS:.cpp=.o)

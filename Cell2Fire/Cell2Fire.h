@@ -15,6 +15,7 @@
 
 // Include libraries
 #include <algorithm>
+#include <array>
 #include <boost/random.hpp>
 #include <cmath>
 #include <iostream>
@@ -117,6 +118,7 @@ class Cell2Fire
     std::vector<float> maxFlameLengths;
     std::vector<std::vector<int>> IgnitionSets;
     // std::vector<int> IgnitionHistory;
+    std::unordered_map<int, std::array<double, 2>> nextIgnitionFocus;
 
     // Sets
     std::unordered_set<int> availCells;

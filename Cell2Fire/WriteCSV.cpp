@@ -319,9 +319,12 @@ CSVWriter::MakeDir(std::string pathPlot)
     Dir = pathPlot.c_str();
     int ret = _mkdir(Dir);
 #else
-    std::string inst = "mkdir -p ";
-    pathPlot = inst + pathPlot;
-    Dir = pathPlot.c_str();
+    std::string command = "mkdir -p \"" + pathPlot + "\"";
+    Dir = command.c_str();
     int ret = system(Dir);
+    if (ret != 0)
+    {
+        std::cerr << "CSVWriter::MakeDir failed for path: " << pathPlot << std::endl;
+    }
 #endif
 }
