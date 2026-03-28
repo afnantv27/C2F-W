@@ -207,3 +207,10 @@ test/target_results
 docs/html
 docs/latex
 Data.csv
+.DS_Store
+.build/
+.codex/
+default.profraw
+Cell2Fire/.claude/
+xcuserdata/
+*.xcuserstate
